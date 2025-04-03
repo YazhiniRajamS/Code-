@@ -1,0 +1,89 @@
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Random;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+
+@Service
+public class FaultFileService {
+
+    private static final String INPUT_FILE = "/home/test/Downloads/File-fault/alarm_reply.xml"; // Hardcoded Input Path
+    private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private final Random random = new Random();
+    private String outputDirectory;
+    private String neId;
+
+    // Method to set dynamic values from API request
+    public void setConfiguration(String outputDirectory, String neId) {
+        this.outputDirectory = outputDirectory;
+        this.neId = neId;
+    }
+
+    @Scheduled(fixedRate = 900000) // 15 minutes (900000 ms)
+    public void generateFaultFile() {
+        if (outputDirectory == null || neId == null) {
+            System.out.println("Output directory and NE ID not set. Skipping file generation.");
+            return;
+        }
+
+        try {
+            // Read input file content
+            String content = new String(Files.readAllBytes(Paths.get(INPUT_FILE)));
+
+            // Generate new timestamp
+            String newTimestamp = LocalDateTime.now().format(TIMESTAMP_FORMATTER);
+
+            // Update <time-created> values
+            content = content.replaceAll("(<time-created>).*?(</time-created>)", "$1" + newTimestamp + "$2");
+
+            // Update <severity> with random values
+            String[] severityLevels = {"low", "moderate", "critical"};
+            Pattern severityPattern = Pattern.compile("(<severity>)(.*?)(</severity>)");
+            Matcher severityMatcher = severityPattern.matcher(content);
+            StringBuffer updatedContent = new StringBuffer();
+
+            while (severityMatcher.find()) {
+                String newSeverity = severityLevels[random.nextInt(severityLevels.length)];
+                severityMatcher.appendReplacement(updatedContent, severityMatcher.group(1) + newSeverity + severityMatcher.group(3));
+            }
+            severityMatcher.appendTail(updatedContent);
+            content = updatedContent.toString();
+
+            // Update <id> with random values
+            Pattern idPattern = Pattern.compile("(<id>)(\\d+)(</id>)");
+            Matcher idMatcher = idPattern.matcher(content);
+            StringBuffer updatedIdContent = new StringBuffer();
+
+            while (idMatcher.find()) {
+                int newId = 100 + random.nextInt(900); // Generate random ID between 100-999
+                idMatcher.appendReplacement(updatedIdContent, idMatcher.group(1) + newId + idMatcher.group(3));
+            }
+            idMatcher.appendTail(updatedIdContent);
+            content = updatedIdContent.toString();
+
+            // Create output directory if it doesn't exist
+            Files.createDirectories(Paths.get(outputDirectory));
+
+            // Generate output file name
+            String outputFileName = "Fault_" + neId + "_" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")) + ".xml";
+            String outputPath = Paths.get(outputDirectory, outputFileName).toString();
+
+            // Write updated content to file
+            try (FileWriter writer = new FileWriter(outputPath)) {
+                writer.write(content);
+            }
+
+            System.out.println("Fault file generated: " + outputPath);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}
