@@ -1,0 +1,32 @@
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/fault-management")
+public class FaultFileController {
+
+    @Autowired
+    private FaultFileService faultFileService;
+
+    @PostMapping("/configure")
+    public Map<String, String> configureFaultFileGeneration(@RequestBody Map<String, String> request) {
+        String neId = request.get("neId");
+        String outputPath = request.get("outputPath");
+
+        if (neId == null || neId.isEmpty() || outputPath == null || outputPath.isEmpty()) {
+            throw new IllegalArgumentException("neId and outputPath are required.");
+        }
+
+        // Set values in the service
+        faultFileService.setConfiguration(outputPath, neId);
+
+        // Response
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "Fault file generation configured successfully");
+        response.put("outputPath", outputPath);
+        return response;
+    }
+}
